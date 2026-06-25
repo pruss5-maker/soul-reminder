@@ -254,11 +254,12 @@ class TestPreLlmCall:
         )
         assert result is not None
         assert "context" in result
-        # Should read as a plugin status notice, not an imperative instruction
+        # Should reference agent-callable tools, not slash commands
         ctx_text = result["context"].lower()
         assert "plugin" in ctx_text
         assert "soul" in ctx_text
-        assert "/soul" in result["context"]
+        assert "soul_create_interview" in result["context"]
+        assert "soul_generate" in result["context"]
 
     def test_onboarding_only_fires_once(self, tmp_hermes_home):
         """Onboarding nudge should only appear once per session."""
@@ -407,3 +408,62 @@ class TestEndToEnd:
         context = result["context"]
         # Should contain at least one concept from the soul
         assert any(kw in context.lower() for kw in ["lie", "valid", "filler", "approval"])
+
+    def test_tool_create_interview(self, tmp_hermes_home):
+        """soul_create_interview tool returns the interview script."""
+        result = _soul._tool_create_interview({})
+        data = json.loads(result)
+        assert "interview" in data
+        assert "name" in data["interview"].lower()
+        assert "truthfulness" in data["interview"].lower() or "lie" in data["interview"].lower()
+
+    def test_tool_generate_soul(self, tmp_hermes_home):
+        """soul_generate tool writes SOUL.md and activates reminders."""
+        answers = {
+            "name": "Vega",
+            "role": "coding agent",
+            "lies": "Never lie.",
+            "creativity": "Unconventional when mediocre",
+            "first_option": "Evaluate alternatives",
+            "verbosity": "Fewest words. Blunt.",
+            "contrarian": "Disagree openly.",
+            "validation": "Always validate.",
+            "hard_stops": "publish without approval, share secrets",
+            "contradictions": "speed vs correctness",
+        }
+        result = _soul._tool_generate_soul(answers)
+        data = json.loads(result)
+        assert data["status"] == "created"
+        assert len(data["concepts"]) > 0
+        assert _soul.load_config()["initialized"] is True
+        # SOUL.md was actually written
+        soul_file = _soul._soul_path()
+        assert soul_file.exists()
+        assert "Vega" in soul_file.read_text()
+
+    def test_onboarding_references_tools_not_slash(self, tmp_hermes_home):
+        """Onboarding prompt should reference tools, not slash commands."""
+        _soul._onboarding_injected = False
+        result = _soul.pre_llm_call(ctx=None, session_id="ob-tools", user_message="hi")
+        assert result is not None
+        ctx = result["context"]
+        assert "soul_create_interview" in ctx
+        assert "soul_generate" in ctx
+        # Should NOT tell the agent to run slash commands
+        assert "/soul create" not in ctx
+        assert "/soul generate" not in ctx
+
+    def test_register_registers_tools(self, tmp_hermes_home):
+        """register() should register both tools."""
+        class FakeCtx:
+            def __init__(self): self.hooks={}; self.commands={}; self.skills={}; self.tools={}
+            def register_hook(self,n,f): self.hooks[n]=f
+            def register_command(self,n,f,**kw): self.commands[n]=f
+            def register_skill(self,n,p): self.skills[n]=p
+            def register_tool(self, name, toolset, schema, handler): self.tools[name] = {"toolset": toolset, "schema": schema, "handler": handler}
+        ctx = FakeCtx()
+        _soul.register(ctx)
+        assert "soul_create_interview" in ctx.tools
+        assert "soul_generate" in ctx.tools
+        assert ctx.tools["soul_create_interview"]["schema"]["name"] == "soul_create_interview"
+        assert ctx.tools["soul_generate"]["schema"]["name"] == "soul_generate"

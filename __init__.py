@@ -226,17 +226,101 @@ def get_reminder() -> str:
 
 _ONBOARDING_PROMPT = """[soul-reminder plugin: first-run notice]
 
-The soul-reminder plugin is installed and enabled. It provides a /soul command (registered by the plugin, not by the user).
+The soul-reminder plugin is installed and enabled but no SOUL.md has been created yet.
 
-Status: No SOUL.md has been created yet. The plugin is waiting for initialization.
+You have two tools available to set this up:
 
-What /soul does:
-- /soul create — returns a guided interview script you can use to ask the user questions about their agent preferences
-- /soul generate <json> — takes the collected answers and writes a SOUL.md, then activates periodic reminders
+1. **soul_create_interview** — call this first. Returns a guided interview script with 10 questions (name, role, truthfulness, creativity, communication style, etc.) each with suggested options. Use these to interview the user conversationally.
 
-Suggested action: run /soul create to get the interview questions, then ask the user those questions conversationally. After they answer, call /soul generate with a JSON object of their answers. This is optional — if the user is mid-task, don't interrupt them. Offer it when there's a natural pause.
+2. **soul_generate** — after collecting answers, call this with a JSON object of the user's answers. It writes the SOUL.md and activates periodic reminders automatically.
+
+Suggested flow: call soul_create_interview, ask the user the questions one at a time, then call soul_generate with their answers. Don't interrupt if the user is mid-task — offer it at a natural pause.
 
 This notice will not appear again once a SOUL.md is created."""
+
+
+# ---------------------------------------------------------------------------
+# Tool schemas
+# ---------------------------------------------------------------------------
+
+SOUL_CREATE_INTERVIEW_SCHEMA = {
+    "name": "soul_create_interview",
+    "description": "Get the guided soul creation interview questions. Returns 10 questions with suggested options and reasoning. Use this to interview the user about their agent preferences, then call soul_generate with the answers.",
+    "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    },
+}
+
+SOUL_GENERATE_SCHEMA = {
+    "name": "soul_generate",
+    "description": "Generate a SOUL.md from the user's interview answers and activate reminders. Call this after interviewing the user with soul_create_interview.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "Agent name"},
+            "role": {"type": "string", "description": "Primary role/job"},
+            "lies": {"type": "string", "description": "Truthfulness policy"},
+            "creativity": {"type": "string", "description": "Creativity level/approach"},
+            "first_option": {"type": "string", "description": "First-option bias"},
+            "verbosity": {"type": "string", "description": "Communication style"},
+            "contrarian": {"type": "string", "description": "Contrarian posture"},
+            "validation": {"type": "string", "description": "Validation loop preference"},
+            "hard_stops": {"type": "string", "description": "Things the agent must NEVER do (comma-separated)"},
+            "contradictions": {"type": "string", "description": "Competing values to balance (newline-separated)"},
+        },
+        "required": ["name", "role"],
+    },
+}
+
+
+def _tool_create_interview(args: dict, **kwargs) -> str:
+    """Tool handler: return the interview prompt."""
+    try:
+        from soul_create import get_interview_prompt
+    except ImportError:
+        import importlib.util
+        _p = Path(__file__).parent / "soul_create.py"
+        _spec = importlib.util.spec_from_file_location("soul_create", _p)
+        _mod = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        get_interview_prompt = _mod.get_interview_prompt
+    return json.dumps({"interview": get_interview_prompt()}, indent=2)
+
+
+def _tool_generate_soul(args: dict, **kwargs) -> str:
+    """Tool handler: generate SOUL.md from answers."""
+    try:
+        from soul_create import generate_soul
+    except ImportError:
+        import importlib.util
+        _p = Path(__file__).parent / "soul_create.py"
+        _spec = importlib.util.spec_from_file_location("soul_create", _p)
+        _mod = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_mod)
+        generate_soul = _mod.generate_soul
+
+    soul_text = generate_soul(args)
+    soul_file = _soul_path()
+    soul_file.parent.mkdir(parents=True, exist_ok=True)
+    soul_file.write_text(soul_text)
+
+    # Activate reminders
+    cfg = load_config()
+    cfg["core_concepts"] = []
+    cfg["initialized"] = True
+    save_config(cfg)
+    concepts = extract_concepts_from_soul(soul_text)
+    cfg["core_concepts"] = concepts
+    save_config(cfg)
+
+    return json.dumps({
+        "status": "created",
+        "path": str(soul_file),
+        "concepts": concepts,
+        "message": f"SOUL.md written to {soul_file}. {len(concepts)} concepts extracted. Reminders active.",
+    }, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -441,11 +525,25 @@ def slash_soul(raw_args: str) -> str:
 def register(ctx):
     """Register the soul-reminder plugin with Hermes."""
     ctx.register_hook("pre_llm_call", lambda **kw: pre_llm_call(ctx=ctx, **kw))
+    # Tools (agent-callable)
+    ctx.register_tool(
+        name="soul_create_interview",
+        toolset="soul-reminder",
+        schema=SOUL_CREATE_INTERVIEW_SCHEMA,
+        handler=_tool_create_interview,
+    )
+    ctx.register_tool(
+        name="soul_generate",
+        toolset="soul-reminder",
+        schema=SOUL_GENERATE_SCHEMA,
+        handler=_tool_generate_soul,
+    )
+    # Slash command (user-facing, for config)
     ctx.register_command(
         "soul",
         slash_soul,
         description="Create your soul, configure reminders, manage agent identity",
-        args_hint="[create|status|generate <json>|interval N|format|enable|disable|refresh|show|set]",
+        args_hint="[status|interval N|format|enable|disable|refresh|show|set]",
     )
     # Register the bundled soul-creator skill
     skill = Path(__file__).parent / "skills" / "soul-creator" / "SKILL.md"
