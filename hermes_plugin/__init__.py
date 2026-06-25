@@ -335,9 +335,61 @@ def slash_soul(raw_args: str) -> str:
         save_config(cfg)
         return f"Set {len(concepts)} concepts: {concepts}"
 
+    if args == "create":
+        # Return the interview prompt for the agent to use
+        try:
+            from .soul_create import get_interview_prompt, generate_soul
+        except ImportError:
+            import importlib.util
+            _p = Path(__file__).parent / "soul_create.py"
+            _spec = importlib.util.spec_from_file_location("soul_create", _p)
+            _mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            get_interview_prompt = _mod.get_interview_prompt
+            generate_soul = _mod.generate_soul
+
+        return get_interview_prompt()
+
+    if args.startswith("generate "):
+        # Generate SOUL.md from JSON answers
+        try:
+            from .soul_create import generate_soul
+        except ImportError:
+            import importlib.util
+            _p = Path(__file__).parent / "soul_create.py"
+            _spec = importlib.util.spec_from_file_location("soul_create", _p)
+            _mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            generate_soul = _mod.generate_soul
+
+        raw_json = args[len("generate "):].strip()
+        try:
+            answers = json.loads(raw_json)
+        except json.JSONDecodeError:
+            return f"Invalid JSON: {raw_json[:100]}"
+
+        soul_text = generate_soul(answers)
+        soul_file = _soul_path()
+        soul_file.parent.mkdir(parents=True, exist_ok=True)
+        soul_file.write_text(soul_text)
+
+        # Refresh concepts from the new soul
+        cfg["core_concepts"] = []
+        save_config(cfg)
+        concepts = extract_concepts_from_soul(soul_text)
+        cfg["core_concepts"] = concepts
+        save_config(cfg)
+
+        return json.dumps({
+            "status": "created",
+            "path": str(soul_file),
+            "concepts": concepts,
+            "message": f"SOUL.md written to {soul_file}. {len(concepts)} concepts extracted. Reminders active.",
+        }, indent=2)
+
     return (
-        "Usage: /soul [status|interval N|format compact|detailed|enable|"
-        "disable|refresh|show|set \"c1, c2, ...\"]"
+        "Usage: /soul [status|create|generate <json>|interval N|format compact|detailed|"
+        "enable|disable|refresh|show|set \"c1, c2, ...\"]"
     )
 
 
@@ -351,6 +403,10 @@ def register(ctx):
     ctx.register_command(
         "soul",
         slash_soul,
-        description="Soul reminder status and configuration",
-        args_hint="[status|interval N|format compact|detailed|enable|disable|refresh|show|set \"c1, c2\"]",
+        description="Create your soul, configure reminders, manage agent identity",
+        args_hint="[create|status|generate <json>|interval N|format|enable|disable|refresh|show|set]",
     )
+    # Register the bundled soul-creator skill
+    skill = Path(__file__).parent / "skills" / "soul-creator" / "SKILL.md"
+    if skill.exists():
+        ctx.register_skill("soul-creator", skill)

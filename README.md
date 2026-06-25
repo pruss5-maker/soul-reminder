@@ -1,92 +1,93 @@
-# ⚡ Soul Reminder
+# ⚡ Soul System
 
-A [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin that injects core identity reminders into every Nth API call to keep your agent's soul fresh across long sessions.
+A [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin that gives your agent a soul — then keeps it fresh.
 
-## The Problem
+## What It Does
 
-Hermes loads `SOUL.md` into identity slot #1 of the system prompt. But in long sessions — especially with context compression — the original soul instructions can drift out of the model's attention window. The agent starts sounding generic, forgetting its constraints, losing its voice.
+**Two parts, one plugin:**
 
-## The Solution
+1. **Soul Creator** — A guided interview that asks what kind of agent you want. What matters to you. What it should never do. Then generates a SOUL.md with behavioral rules, not vibes.
+2. **Soul Reminder** — Reads your SOUL.md, extracts the core concepts, and injects compact reminders every Nth API call to keep identity fresh across long sessions.
 
-**Two-part soul system:**
-
-1. **soul-creator** (skill) — creates the SOUL.md identity file with behavioral rules, not vibes
-2. **soul-reminder** (this plugin) — extracts the core concepts from SOUL.md and injects compact reminders at configurable intervals
-
-The reminder looks like:
+## The Flow
 
 ```
-⚡ Soul reminder: Do not lie, validate before executing, fewest words possible,
-go against the grain, be creative.
+User: "Hey, create a soul for your agent"
+Agent: *asks guided questions with suggestions and reasoning*
+User: *answers*
+Agent: *generates SOUL.md, applies slop detector, activates reminders*
+→ From now on, every API call gets: "⚡ Soul reminder: don't lie, validate first, ..."
 ```
-
-This gets appended to the current turn's user message context, preserving prompt caching and avoiding system prompt mutation.
 
 ## Quick Start
 
 ```bash
 # Install
-git clone https://github.com/pattirae/soul-reminder.git
+git clone https://github.com/pruss5-maker/soul-reminder.git
 cd soul-reminder
 ./install.sh
 
-# Restart Hermes
-# Then check status:
-/soul status
+# Restart Hermes, then:
+/soul create
 ```
 
-## How It Works
-
-1. **Auto-extracts concepts from SOUL.md** — reads `~/.hermes/SOUL.md`, finds the most load-bearing lines (negations, hard rules, core thesis, truthfulness policy)
-2. **Injects at configurable intervals** — every API call (default), every 5th, whatever you want
-3. **Two formats** — compact (single line) or detailed (bulleted)
-4. **Manual override** — set custom concepts with `/soul set`
+The agent will interview you, generate the soul, and activate reminders automatically.
 
 ## Commands
 
 | Command | What it does |
 |---------|-------------|
-| `/soul` | Show current status, concepts, and config |
-| `/soul interval N` | Inject every Nth API call |
-| `/soul format compact` | Single-line reminder (default) |
-| `/soul format detailed` | Bulleted reminder |
-| `/soul enable` | Enable reminders |
-| `/soul disable` | Disable reminders |
+| `/soul create` | Start guided interview to create your SOUL.md |
+| `/soul status` | Show current config, concepts, soul file |
+| `/soul interval N` | Inject reminder every Nth API call |
+| `/soul format compact` | Single-line reminders (default) |
+| `/soul format detailed` | Bulleted reminders |
+| `/soul enable` / `disable` | Toggle reminders |
 | `/soul refresh` | Re-extract concepts from SOUL.md |
-| `/soul show` | Show current concepts |
-| `/soul set "c1, c2, c3"` | Manually set concepts |
+| `/soul show` | Show extracted concepts |
+| `/soul set "c1, c2"` | Manually override concepts |
 
-## Configuration
+## How the Interview Works
 
-Config is stored in `hermes_plugin/soul_reminder_config.json`:
+The `/soul create` command asks 10 questions with guided suggestions and reasoning for each:
 
-```json
-{
-    "enabled": true,
-    "interval": 1,
-    "format": "compact",
-    "reminder_prefix": "⚡ Soul reminder:",
-    "soul_file": "",
-    "core_concepts": []
-}
+1. **Name** — identity anchor
+2. **Role** — domain definition
+3. **Truthfulness** — the most important behavioral rule
+4. **Creativity** — when to try unconventional approaches
+5. **First-option bias** — evaluate alternatives vs. accept first answer
+6. **Communication style** — fewest words, blunt, witty
+7. **Contrarian posture** — disagree openly vs. follow along
+8. **Validation loop** — set goals and criteria before working
+9. **Hard stops** — things the agent must NEVER do
+10. **Contradictions** — competing values the agent must balance
+
+Each question includes **why it matters** — the research-backed reasoning behind the rule.
+
+## What Makes a Good Soul
+
+Distilled from deep research across the soul document discovery, Anthropic's Constitution, community practices, and real-world failures:
+
+- **Behavioral rules, not adjectives** — "say what's missing" beats "be honest"
+- **Contradictions make identity real** — include tensions deliberately
+- **Negations catch drift** — what you refuse to do defines you more than what you're told to be
+- **Specificity beats generality** — every line should catch a specific future drift
+- **Few, strong rules** — 3-5 hard gates beat 30 aspirations
+
+## How Reminders Work
+
+The plugin reads SOUL.md and extracts concepts from priority sections:
+1. What You Will Not Do / Hard Rules (strongest)
+2. How You Work / Core Thesis
+3. Truthfulness / Definition of Done
+4. Fallback: any "Don't" / "Never" line
+
+Then injects at your configured interval:
+```
+⚡ Soul reminder: Do not lie, validate before executing, fewest words possible, go against the grain.
 ```
 
-- `soul_file` — empty = auto-detect `$HERMES_HOME/SOUL.md`
-- `core_concepts` — empty = auto-extract from SOUL.md
-
-## Concept Extraction
-
-The plugin reads SOUL.md and pulls from priority sections in this order:
-
-1. **What You Will Not Do** / **Hard Rules** / **Negations** — the strongest behavioral gates
-2. **Core Thesis** / **How You Work** / **Optimize For** — the operating principles
-3. **Truthfulness** / **Definition of Done** — the verification gates
-4. Fallback: any line starting with "Don't", "Do not", "Never"
-5. Last resort: first few non-empty lines
-
-## Compatibility
-
-Works with any Hermes Agent instance. Pairs with the `soul-creator` skill for the complete two-part soul system.
+Appended to the current turn's user message context — preserves prompt caching, doesn't mutate system prompt.
 
 ## Testing
 
@@ -94,7 +95,29 @@ Works with any Hermes Agent instance. Pairs with the `soul-creator` skill for th
 python3 -m pytest tests/ -v
 ```
 
-25 tests covering config, concept extraction, reminder building, hook behavior, slash commands, and end-to-end flow.
+## Project Structure
+
+```
+soul-reminder/
+├── hermes_plugin/
+│   ├── __init__.py              # Plugin: hooks, slash command, reminders
+│   ├── soul_create.py           # Guided interview + SOUL.md generation
+│   ├── plugin.yaml
+│   ├── soul_reminder_config.json
+│   └── skills/
+│       └── soul-creator/
+│           ├── SKILL.md         # Skill: deep soul creation methodology
+│           ├── references/
+│           │   ├── research-synthesis.md
+│           │   └── slop-detector.md
+│           └── templates/
+│               └── base-soul.md
+├── install.sh
+├── uninstall.sh
+├── tests/
+│   └── test_soul_reminder.py
+└── README.md
+```
 
 ## License
 
@@ -102,4 +125,4 @@ MIT
 
 ## Origin
 
-The soul.md concept comes from a real discovery: in November 2025, Richard Weiss extracted a ~14,000 token "soul document" from Claude 4.5 Opus's weights — an identity document baked in through training. Amanda Askell confirmed it. This plugin operationalizes that concept at runtime: keeping identity fresh when the original can't be in the weights.
+The soul.md concept comes from a real discovery: in November 2025, Richard Weiss extracted a ~14,000 token "soul document" from Claude 4.5 Opus's weights — an identity document baked in through training. Amanda Askell confirmed it. This plugin operationalizes that concept: helping agents know who they are, and reminding them when they forget.

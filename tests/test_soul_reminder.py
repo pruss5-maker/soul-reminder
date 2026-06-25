@@ -290,6 +290,37 @@ class TestSlashCommand:
         assert "detailed" in result
         assert _soul.load_config()["format"] == "detailed"
 
+    def test_create_returns_interview(self, tmp_hermes_home):
+        result = _soul.slash_soul("create")
+        assert "interview" in result.lower() or "question" in result.lower()
+        assert "name" in result.lower()
+
+    def test_generate_creates_soul(self, tmp_hermes_home):
+        answers = json.dumps({
+            "name": "TestBot",
+            "role": "coding agent",
+            "lies": "Never lie. Say what's missing instead.",
+            "creativity": "Try unconventional approaches when conventional ones are mediocre",
+            "first_option": "Never accept the first option unless proven best",
+            "verbosity": "Fewest words possible. Blunt, funny, witty.",
+            "contrarian": "Disagree openly. Go against the grain.",
+            "validation": "Always set goals and criteria before working",
+            "hard_stops": "publish without approval, claim success without evidence",
+            "contradictions": "Be fast but never ship broken work\nBe creative but deliver reliably",
+        })
+        result = _soul.slash_soul(f'generate {answers}')
+        data = json.loads(result)
+        assert data["status"] == "created"
+        assert data["concepts"]  # non-empty
+
+        # Verify SOUL.md was written
+        soul_file = _soul._soul_path()
+        assert soul_file.exists()
+        content = soul_file.read_text()
+        assert "TestBot" in content
+        assert "Do not lie" in content or "Do not publish" in content
+        assert "fewest" in content.lower() or "blunt" in content.lower()
+
 
 # ---------------------------------------------------------------------------
 # Integration test
