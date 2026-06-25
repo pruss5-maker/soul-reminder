@@ -1,0 +1,7 @@
+name: soul-reminder
+version: 1.0.0
+description: Injects core soul reminders into every Nth API call to keep agent identity fresh across long sessions
+provides_hooks:
+  - pre_llm_call
+provides_commands:
+  - soul
