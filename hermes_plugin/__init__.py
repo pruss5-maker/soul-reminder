@@ -30,7 +30,7 @@ from typing import Any
 
 _DEFAULT_CONFIG = {
     "enabled": True,
-    "interval": 1,           # inject every Nth API call
+    "interval": 5,           # inject every Nth API call (default: every 5th)
     "format": "compact",     # "compact" or "detailed"
     "reminder_prefix": "⚡ Soul reminder:",
     "soul_file": "",         # auto-detected if empty

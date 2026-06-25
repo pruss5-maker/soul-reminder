@@ -93,7 +93,7 @@ class TestConfig:
     def test_default_config(self, tmp_hermes_home):
         cfg = _soul.load_config()
         assert cfg["enabled"] is True
-        assert cfg["interval"] == 1
+        assert cfg["interval"] == 5
         assert cfg["format"] == "compact"
 
     def test_save_and_load(self, tmp_hermes_home):
@@ -199,9 +199,10 @@ class TestPreLlmCall:
     def test_injects_on_every_call(self, tmp_hermes_home, sample_soul):
         # Write SOUL.md
         (tmp_hermes_home / "SOUL.md").write_text(sample_soul)
-        # Reset config so concepts auto-extract
+        # Reset config so concepts auto-extract, set interval=1 for this test
         cfg = _soul.load_config()
         cfg["core_concepts"] = []
+        cfg["interval"] = 1
         _soul.save_config(cfg)
 
         result = _soul.pre_llm_call(
@@ -330,6 +331,10 @@ class TestEndToEnd:
     def test_full_flow_auto_extract(self, tmp_hermes_home, sample_soul):
         """Write a SOUL.md, call pre_llm_call, verify reminder appears."""
         (tmp_hermes_home / "SOUL.md").write_text(sample_soul)
+        # Set interval=1 so first call fires
+        cfg = _soul.load_config()
+        cfg["interval"] = 1
+        _soul.save_config(cfg)
 
         # First call should auto-extract concepts and inject
         result = _soul.pre_llm_call(
