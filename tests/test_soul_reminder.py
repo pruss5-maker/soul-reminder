@@ -106,6 +106,7 @@ class TestConfig:
         assert cfg["enabled"] is True
         assert cfg["interval"] == 5
         assert cfg["format"] == "compact"
+        assert cfg["initialized"] is False
 
     def test_save_and_load(self, tmp_hermes_home):
         cfg = _soul.load_config()
@@ -208,13 +209,14 @@ class TestReminderBuilding:
 
 class TestPreLlmCall:
     def test_injects_on_every_call(self, tmp_hermes_home, sample_soul):
-        # Write SOUL.md
+        # Write SOUL.md and mark as initialized
         (tmp_hermes_home / "SOUL.md").write_text(sample_soul)
-        # Reset config so concepts auto-extract, set interval=1 for this test
         cfg = _soul.load_config()
         cfg["core_concepts"] = []
         cfg["interval"] = 1
+        cfg["initialized"] = True
         _soul.save_config(cfg)
+        _soul._onboarding_injected = False
 
         result = _soul.pre_llm_call(
             ctx=None, session_id="test-1", user_message="hello"
@@ -229,7 +231,9 @@ class TestPreLlmCall:
         cfg = _soul.load_config()
         cfg["core_concepts"] = ["don't lie", "validate first"]
         cfg["interval"] = 3
+        cfg["initialized"] = True
         _soul.save_config(cfg)
+        _soul._onboarding_injected = False
 
         # Calls 1 and 2 should not inject
         r1 = _soul.pre_llm_call(ctx=None, session_id="test-2", user_message="msg1")
@@ -242,23 +246,65 @@ class TestPreLlmCall:
         assert r3 is not None
         assert "context" in r3
 
+    def test_onboarding_fires_when_not_initialized(self, tmp_hermes_home):
+        """First run with no SOUL.md should inject onboarding prompt."""
+        _soul._onboarding_injected = False
+        result = _soul.pre_llm_call(
+            ctx=None, session_id="onboard-1", user_message="hello"
+        )
+        assert result is not None
+        assert "context" in result
+        assert "soul" in result["context"].lower()
+        assert "interview" in result["context"].lower()
+
+    def test_onboarding_only_fires_once(self, tmp_hermes_home):
+        """Onboarding nudge should only appear once per session."""
+        _soul._onboarding_injected = False
+        r1 = _soul.pre_llm_call(ctx=None, session_id="onboard-2", user_message="hi")
+        assert r1 is not None
+        assert "interview" in r1["context"].lower()
+
+        r2 = _soul.pre_llm_call(ctx=None, session_id="onboard-2", user_message="hi again")
+        assert r2 is None  # no more onboarding
+
+    def test_onboarding_skipped_when_initialized(self, tmp_hermes_home, sample_soul):
+        """When initialized=True, no onboarding — go straight to reminders."""
+        (tmp_hermes_home / "SOUL.md").write_text(sample_soul)
+        cfg = _soul.load_config()
+        cfg["core_concepts"] = ["don't lie"]
+        cfg["interval"] = 1
+        cfg["initialized"] = True
+        _soul.save_config(cfg)
+        _soul._onboarding_injected = False
+
+        result = _soul.pre_llm_call(
+            ctx=None, session_id="init-1", user_message="hello"
+        )
+        assert result is not None
+        assert "interview" not in result["context"].lower()
+        assert "don't lie" in result["context"].lower()
+
     def test_disabled_returns_none(self, tmp_hermes_home, sample_soul):
         (tmp_hermes_home / "SOUL.md").write_text(sample_soul)
         cfg = _soul.load_config()
         cfg["enabled"] = False
+        cfg["initialized"] = True
         _soul.save_config(cfg)
+        _soul._onboarding_injected = False
 
         result = _soul.pre_llm_call(
             ctx=None, session_id="test-3", user_message="hello"
         )
         assert result is None
 
-    def test_no_soul_returns_none(self, tmp_hermes_home):
-        # No SOUL.md exists
+    def test_no_soul_returns_onboarding(self, tmp_hermes_home):
+        """With no SOUL.md, returns onboarding prompt (not None)."""
+        _soul._onboarding_injected = False
         result = _soul.pre_llm_call(
             ctx=None, session_id="test-4", user_message="hello"
         )
-        assert result is None
+        assert result is not None
+        assert "interview" in result["context"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -342,10 +388,12 @@ class TestEndToEnd:
     def test_full_flow_auto_extract(self, tmp_hermes_home, sample_soul):
         """Write a SOUL.md, call pre_llm_call, verify reminder appears."""
         (tmp_hermes_home / "SOUL.md").write_text(sample_soul)
-        # Set interval=1 so first call fires
+        # Set interval=1 and initialized=True so first call fires as reminder
         cfg = _soul.load_config()
         cfg["interval"] = 1
+        cfg["initialized"] = True
         _soul.save_config(cfg)
+        _soul._onboarding_injected = False
 
         # First call should auto-extract concepts and inject
         result = _soul.pre_llm_call(

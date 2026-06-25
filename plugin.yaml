@@ -1,6 +1,6 @@
 name: soul-reminder
-version: 2.0.0
-description: Two-part soul system — guided SOUL.md creation + automatic identity reminders every Nth API call
+version: 2.1.0
+description: Two-part soul system — guided SOUL.md creation with auto-onboarding + identity reminders every Nth API call
 provides_hooks:
   - pre_llm_call
 provides_commands:

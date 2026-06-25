@@ -35,7 +35,10 @@ _DEFAULT_CONFIG = {
     "reminder_prefix": "⚡ Soul reminder:",
     "soul_file": "",         # auto-detected if empty
     "core_concepts": [],     # auto-extracted if empty
+    "initialized": False,    # True after /soul generate creates a SOUL.md
 }
+
+_onboarding_injected = False  # track if we've shown the onboarding nudge this session
 
 _call_counter: dict[str, int] = {}
 
@@ -218,27 +221,67 @@ def get_reminder() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Onboarding prompt — injected on first run when no SOUL.md exists
+# ---------------------------------------------------------------------------
+
+_ONBOARDING_PROMPT = """⚡ Soul system installed! You don't have a SOUL.md yet.
+
+Start your soul creation interview NOW. Ask the user these questions one at a time, conversationally. Use the suggestions as options they can pick from. When they answer, move to the next question.
+
+1. **Name** — What should I call my agent? (e.g. Atlas, Nova, Hermes, or any name)
+2. **Role** — What's the agent's primary job? (coding, research, writing, general, trading, devops)
+3. **Truthfulness** — Should the agent ever lie? (Recommend: never — say what's missing instead)
+4. **Creativity** — Try unconventional approaches when conventional ones are mediocre? (Recommend: yes)
+5. **First-option bias** — Evaluate alternatives or go with the first answer? (Recommend: never accept first option unless proven best)
+6. **Communication** — Fewest words possible and blunt/funny/witty? Or concise-professional? Or detailed?
+7. **Contrarian** — Disagree openly when evidence warrants? Or follow along?
+8. **Validation** — Set goals and validation criteria before doing work? (Recommend: always)
+9. **Hard stops** — What should the agent NEVER do? (e.g. publish without approval, claim success without evidence, share secrets)
+10. **Contradictions** — What competing values should the agent balance? (e.g. speed vs correctness, autonomy vs safety)
+
+After collecting all answers, call /soul generate with the answers as JSON. This creates the SOUL.md and activates reminders automatically. The user should NOT need to type any commands — you handle everything."""
+
+
+# ---------------------------------------------------------------------------
 # Plugin hook
 # ---------------------------------------------------------------------------
 
 def pre_llm_call(ctx=None, session_id=None, user_message="",
                  conversation_history=None, model="", platform="", **kwargs) -> dict | None:
-    """Hermes pre_llm_call hook. Injects reminder at configured interval.
+    """Hermes pre_llm_call hook.
 
-    The reminder is appended to the current turn's user message context,
-    preserving prompt caching and avoiding system prompt mutation.
+    First-run behavior: if no SOUL.md exists yet, inject an onboarding nudge
+    that tells the agent to start the guided interview. The user just answers
+    questions — they never need to type /soul create.
+
+    Normal behavior: inject reminder at configured interval.
     """
+    global _onboarding_injected
     cfg = load_config()
 
     if not cfg.get("enabled", True):
         return None
 
+    # --- First-run onboarding ---
+    # Check if we need to onboarding. Two conditions:
+    # 1. initialized flag not set in config
+    # 2. No SOUL.md exists (or it's the default Hermes one)
+    soul_file = _soul_path()
+    soul_is_custom = cfg.get("initialized", False) or (
+        soul_file.exists() and "soul-reminder" in soul_file.read_text().lower()
+    )
+
+    if not soul_is_custom and not _onboarding_injected:
+        _onboarding_injected = True  # only inject once per session
+        return {"context": _ONBOARDING_PROMPT}
+
+    # --- Normal reminder injection ---
     # Track call count per session
     sid = session_id or "_default"
     _call_counter[sid] = _call_counter.get(sid, 0) + 1
     count = _call_counter[sid]
 
-    interval = max(1, int(cfg.get("interval", 1)))
+    interval = max(1, int(cfg.get("interval", 5)))
 
     # Only inject on every Nth call
     if count % interval != 0:
@@ -375,6 +418,7 @@ def slash_soul(raw_args: str) -> str:
 
         # Refresh concepts from the new soul
         cfg["core_concepts"] = []
+        cfg["initialized"] = True  # Mark as initialized — stop onboarding nudges
         save_config(cfg)
         concepts = extract_concepts_from_soul(soul_text)
         cfg["core_concepts"] = concepts
