@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-# Make plugin importable
-PLUGIN_DIR = Path(__file__).parent.parent / "hermes_plugin"
+# Make plugin importable (plugin files are at repo root now)
+PLUGIN_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(PLUGIN_DIR))
 
 # Need to import after sys.path setup

@@ -10,7 +10,7 @@ PLUGIN_NAME="soul-reminder"
 # Resolve HERMES_HOME
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 PLUGINS_DIR="$HERMES_HOME/plugins"
-PLUGIN_SRC="$SCRIPT_DIR/hermes_plugin"
+PLUGIN_SRC="$SCRIPT_DIR"
 PLUGIN_DST="$PLUGINS_DIR/$PLUGIN_NAME"
 
 echo "🔌 Installing $PLUGIN_NAME plugin..."
