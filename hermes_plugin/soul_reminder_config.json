@@ -1,8 +1,10 @@
 {
+    "core_concepts": [
+        "x"
+    ],
     "enabled": true,
-    "interval": 5,
     "format": "compact",
-    "reminder_prefix": "⚡ Soul reminder:",
-    "soul_file": "",
-    "core_concepts": []
+    "interval": 5,
+    "reminder_prefix": "\u26a1 Soul reminder:",
+    "soul_file": ""
 }

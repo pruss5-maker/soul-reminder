@@ -26,19 +26,30 @@ _soul = importlib.import_module("__init__")
 
 @pytest.fixture
 def tmp_hermes_home(monkeypatch, tmp_path):
-    """Redirect HERMES_HOME to a temp dir and reset config to defaults."""
+    """Redirect HERMES_HOME to a temp dir and reset config to defaults.
+
+    Saves and restores the live config file so tests never leave it dirty.
+    """
     home = tmp_path / ".hermes"
     home.mkdir()
     monkeypatch.setenv("HERMES_HOME", str(home))
 
-    # Reset config file to defaults (config lives next to plugin, not HERMES_HOME)
+    # Snapshot the live config file so we can restore it on teardown
     config_path = _soul._config_path()
-    default_cfg = dict(_soul._DEFAULT_CONFIG)
-    _soul.save_config(default_cfg)
+    original_content = config_path.read_text() if config_path.exists() else None
+
+    # Reset config file to defaults for this test
+    _soul.save_config(dict(_soul._DEFAULT_CONFIG))
 
     # Clear call counter
     _soul._call_counter.clear()
-    return home
+
+    yield home
+
+    # Restore the live config file
+    if original_content is not None:
+        config_path.write_text(original_content)
+    _soul._call_counter.clear()
 
 
 @pytest.fixture
