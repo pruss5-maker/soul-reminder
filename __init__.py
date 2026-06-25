@@ -224,22 +224,19 @@ def get_reminder() -> str:
 # Onboarding prompt — injected on first run when no SOUL.md exists
 # ---------------------------------------------------------------------------
 
-_ONBOARDING_PROMPT = """⚡ Soul system installed! You don't have a SOUL.md yet.
+_ONBOARDING_PROMPT = """[soul-reminder plugin: first-run notice]
 
-Start your soul creation interview NOW. Ask the user these questions one at a time, conversationally. Use the suggestions as options they can pick from. When they answer, move to the next question.
+The soul-reminder plugin is installed and enabled. It provides a /soul command (registered by the plugin, not by the user).
 
-1. **Name** — What should I call my agent? (e.g. Atlas, Nova, Hermes, or any name)
-2. **Role** — What's the agent's primary job? (coding, research, writing, general, trading, devops)
-3. **Truthfulness** — Should the agent ever lie? (Recommend: never — say what's missing instead)
-4. **Creativity** — Try unconventional approaches when conventional ones are mediocre? (Recommend: yes)
-5. **First-option bias** — Evaluate alternatives or go with the first answer? (Recommend: never accept first option unless proven best)
-6. **Communication** — Fewest words possible and blunt/funny/witty? Or concise-professional? Or detailed?
-7. **Contrarian** — Disagree openly when evidence warrants? Or follow along?
-8. **Validation** — Set goals and validation criteria before doing work? (Recommend: always)
-9. **Hard stops** — What should the agent NEVER do? (e.g. publish without approval, claim success without evidence, share secrets)
-10. **Contradictions** — What competing values should the agent balance? (e.g. speed vs correctness, autonomy vs safety)
+Status: No SOUL.md has been created yet. The plugin is waiting for initialization.
 
-After collecting all answers, call /soul generate with the answers as JSON. This creates the SOUL.md and activates reminders automatically. The user should NOT need to type any commands — you handle everything."""
+What /soul does:
+- /soul create — returns a guided interview script you can use to ask the user questions about their agent preferences
+- /soul generate <json> — takes the collected answers and writes a SOUL.md, then activates periodic reminders
+
+Suggested action: run /soul create to get the interview questions, then ask the user those questions conversationally. After they answer, call /soul generate with a JSON object of their answers. This is optional — if the user is mid-task, don't interrupt them. Offer it when there's a natural pause.
+
+This notice will not appear again once a SOUL.md is created."""
 
 
 # ---------------------------------------------------------------------------

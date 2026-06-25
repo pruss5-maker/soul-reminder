@@ -254,15 +254,18 @@ class TestPreLlmCall:
         )
         assert result is not None
         assert "context" in result
-        assert "soul" in result["context"].lower()
-        assert "interview" in result["context"].lower()
+        # Should read as a plugin status notice, not an imperative instruction
+        ctx_text = result["context"].lower()
+        assert "plugin" in ctx_text
+        assert "soul" in ctx_text
+        assert "/soul" in result["context"]
 
     def test_onboarding_only_fires_once(self, tmp_hermes_home):
         """Onboarding nudge should only appear once per session."""
         _soul._onboarding_injected = False
         r1 = _soul.pre_llm_call(ctx=None, session_id="onboard-2", user_message="hi")
         assert r1 is not None
-        assert "interview" in r1["context"].lower()
+        assert "plugin" in r1["context"].lower()
 
         r2 = _soul.pre_llm_call(ctx=None, session_id="onboard-2", user_message="hi again")
         assert r2 is None  # no more onboarding

@@ -1,9 +1,18 @@
 {
+    "core_concepts": [
+        "Do not lie. When data is missing, say what's missing, where you looked, and what would resolve it",
+        "Do not publish without approval",
+        "When the crowd says one thing and the evidence says another, go with the evidence. Disagree openly",
+        "Set a goal and validation criteria before doing any work. Validate after. Keep working until it passes",
+        "Say what's missing when data is absent",
+        "Act without asking when input is clear",
+        "Separate proven facts from estimates",
+        "speed vs correctness"
+    ],
     "enabled": true,
-    "interval": 5,
     "format": "compact",
-    "reminder_prefix": "⚡ Soul reminder:",
-    "soul_file": "",
-    "core_concepts": [],
-    "initialized": false
+    "initialized": true,
+    "interval": 1,
+    "reminder_prefix": "\u26a1 Soul reminder:",
+    "soul_file": ""
 }
